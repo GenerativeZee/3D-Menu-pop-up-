@@ -65,7 +65,13 @@ export async function usdzExists(url: string): Promise<boolean> {
 /*  WebXR session                                                             */
 /* -------------------------------------------------------------------------- */
 
-export type ARStatus = "starting" | "scanning" | "placed" | "unsupported" | "error";
+export type ARStatus =
+  | "starting"
+  | "scanning"
+  | "placed"
+  | "unsupported"
+  | "insecure"
+  | "error";
 
 export interface WebXRLaunchOptions {
   shape: HeroShape;
@@ -96,6 +102,13 @@ export async function launchWebXR(opts: WebXRLaunchOptions): Promise<ARHandle> {
   } = opts;
 
   onStatus?.("starting");
+
+  // WebXR immersive sessions only run in a secure context (https / localhost).
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    onStatus?.("insecure");
+    throw new Error("WebXR requires a secure context (https or localhost)");
+  }
+
   const THREE = await import("three");
   const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
   if (!xr) {
@@ -116,15 +129,16 @@ export async function launchWebXR(opts: WebXRLaunchOptions): Promise<ARHandle> {
     throw e;
   }
 
-  const canvas = document.createElement("canvas");
-  const gl = canvas.getContext("webgl", {
-    xrCompatible: true,
-    alpha: true,
+  // Idiomatic three WebXR setup: let three own the canvas/context, keep the
+  // framebuffer transparent so the camera passthrough shows behind the scene.
+  const renderer = new THREE.WebGLRenderer({
     antialias: true,
-  }) as WebGLRenderingContext;
-
-  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, alpha: true });
+    alpha: true,
+    powerPreference: "high-performance",
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.xr.enabled = true;

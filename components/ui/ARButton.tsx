@@ -20,6 +20,7 @@ const STATUS_COPY: Record<ARStatus, string> = {
   scanning: "Point at your table, then tap to place",
   placed: "Tap the floor to move it",
   unsupported: "AR isn’t available on this device",
+  insecure: "AR needs a secure page — open the https:// link",
   error: "Couldn’t start AR",
 };
 
@@ -93,8 +94,8 @@ export function ARButton() {
       },
       onError: () => {
         if (!cancelled) {
-          setStatus("error");
-          window.setTimeout(() => setRunning(false), 1600);
+          setStatus((s) => (s === "insecure" || s === "unsupported" ? s : "error"));
+          window.setTimeout(() => setRunning(false), 2600);
         }
       },
     })
@@ -104,8 +105,8 @@ export function ARButton() {
       })
       .catch(() => {
         if (!cancelled) {
-          setStatus("error");
-          window.setTimeout(() => setRunning(false), 1600);
+          setStatus((s) => (s === "insecure" || s === "unsupported" ? s : "error"));
+          window.setTimeout(() => setRunning(false), 2600);
         }
       });
 
