@@ -57,15 +57,19 @@ export function TopBar() {
   const setOrientationEnabled = useAppStore((s) => s.setOrientationEnabled);
   const device = useAppStore((s) => s.device);
   const [table, setTable] = useState(restaurant.defaultTable);
+  // Gate anything that depends on browser globals until after hydration so the
+  // server and first client render produce identical markup.
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const p = new URLSearchParams(window.location.search);
     const t = p.get("t") || p.get("table");
     if (t) setTable(t);
   }, []);
 
   const showTilt =
-    typeof window !== "undefined" &&
+    mounted &&
     "DeviceOrientationEvent" in window &&
     !device?.reducedMotion;
 

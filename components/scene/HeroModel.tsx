@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { categories } from "@/config";
@@ -21,12 +21,20 @@ interface Props {
  * that the GSAP timeline is tweening and maps them onto its transform, adds a
  * touch of life (idle spin) and a gyroscope-driven counter-parallax so the food
  * feels anchored in real space as the phone tilts.
+ *
+ * `heroMotion.shape` is not React state, so it is mirrored into local state here
+ * (synced in useFrame) — that is what actually swaps the rendered mesh when the
+ * customer taps a different category.
  */
 export function HeroModel({ tilt, glbAvailable, onModelError }: Props) {
   const group = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
+  const [shape, setShape] = useState(heroMotion.shape);
 
   useFrame((_, dt) => {
+    // keep the rendered mesh in sync with the tapped category
+    if (heroMotion.shape !== shape) setShape(heroMotion.shape);
+
     const g = group.current;
     if (!g) return;
     g.visible = heroMotion.visible;
@@ -53,7 +61,7 @@ export function HeroModel({ tilt, glbAvailable, onModelError }: Props) {
   });
 
   const shapeCat =
-    categories.find((c) => c.shape === heroMotion.shape) ?? categories[0];
+    categories.find((c) => c.shape === shape) ?? categories[0];
   const useGlb = glbAvailable[shapeCat.model] === true;
 
   return (
@@ -61,15 +69,16 @@ export function HeroModel({ tilt, glbAvailable, onModelError }: Props) {
       <group ref={inner}>
         {useGlb ? (
           <SceneErrorBoundary
+            key={shape}
             onError={onModelError}
-            fallback={<ProceduralHero shape={heroMotion.shape} />}
+            fallback={<ProceduralHero shape={shape} />}
           >
-            <Suspense fallback={<ProceduralHero shape={heroMotion.shape} />}>
+            <Suspense fallback={<ProceduralHero shape={shape} />}>
               <GLBHero url={shapeCat.model} />
             </Suspense>
           </SceneErrorBoundary>
         ) : (
-          <ProceduralHero shape={heroMotion.shape} />
+          <ProceduralHero shape={shape} />
         )}
       </group>
     </group>
