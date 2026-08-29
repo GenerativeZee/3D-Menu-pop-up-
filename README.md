@@ -1,36 +1,115 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ember & Oak — Immersive 3D QR Menu
 
-## Getting Started
+A mobile-first restaurant menu whose signature interaction is a **cinematic
+depth transition**: tap a category and a realistic hero dish rises _out of the
+phone screen_ toward you, rotates, hits a peak, then recedes back through the
+glass to reveal that category's menu.
 
-First, run the development server:
+Built with **Next.js 16 (App Router) · React Three Fiber · three.js ·
+@react-three/postprocessing · GSAP · Zustand · Tailwind v4**.
+
+---
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000  (add ?t=T12 to set a table id)
+npm run build && npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Deploy: it's a stock Next.js app — `vercel` (or any Node host) with zero config.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## The out-of-the-screen illusion — how it's done
 
-## Learn More
+Not a 2D scale. A real perspective camera (`fov 40`, at `z = 6.5`) and a hero
+object that travels in world space from `z ≈ -9.5` (deep inside the screen) to
+`z ≈ +3.2` (past the near plane, "through" the glass) and back, in ~2.3 s.
 
-To learn more about Next.js, take a look at the following resources:
+| Layer | Contribution |
+| --- | --- |
+| `lib/transition.ts` | GSAP timeline tweening one mutable `heroMotion` object (z, spin, scale, emergence, portal, shake). Read every frame — never via React state. |
+| `components/scene/HeroModel.tsx` | Maps `heroMotion` → transform each frame; adds gyro counter-parallax + idle spin. |
+| `components/scene/Rig.tsx` | Studio 3-point lighting, a **locally-baked** env map (no CDN), contact shadows, camera parallax + a decaying shake impulse at the peak. |
+| `components/scene/Effects.tsx` | Bloom that swells as the dish nears the lens, depth-of-field (soft deep-screen start → sharp on approach), chromatic aberration + vignette pulse on the peak beat. |
+| `components/ui/PortalFrame.tsx` | The "phone glass": permanent bezel + sheen, and a swelling inner shadow + accent rim-light that the emerging dish visibly **covers** as it crosses the plane. |
+| Perspective scale | The dish grows because it gets closer to the camera, with correct foreshortening — not because a texture is scaled. |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Architecture (swap-a-file re-brand)
 
-## Deploy on Vercel
+```
+config/
+  restaurant.ts     restaurant identity, currency
+  categories.ts     per-category: accent theme, GLB path, hero shape, transition tuning
+  menu.ts           menu items (name / description / price / tags / optional photo)
+lib/
+  performance.ts    device tier probe → dpr, postFx, dof, shadows, duration
+  transition.ts     cinematic controller (GSAP timeline + shared motion state)
+  sound.ts          procedural Web Audio cues (whoosh / thump), muted by default
+  art.ts            generated "plated food" SVG panels (no external images)
+  ar.ts             optional WebXR "View on my table" (hit-test, dynamic import)
+store/useAppStore.ts   discrete state: active/menu category, phase, sound, device
+hooks/
+  useDeviceOrientation.ts   gyro parallax + iOS permission flow
+  useModelExists.ts         HEAD probe so missing GLBs fall to procedural cleanly
+  useHeroMotionFrame.ts     rAF bridge for DOM overlays
+components/
+  MenuApp.tsx        client orchestrator; lazy-loads the 3D bundle
+  Stage3D.tsx        R3F <Canvas> (dynamic, ssr:false)
+  scene/*            HeroModel, Rig, Effects, GLBHero, ProceduralModels, ErrorBoundary
+  ui/*               TopBar, CategoryNav, MenuView, MenuItemCard, PortalFrame,
+                     EntryVeil, ARButton, FallbackTransition
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+To reuse for another venue: edit the three `config/*` files and drop assets in
+`public/assets/`. No component touches menu data directly.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 3D assets
+
+`public/assets/3d/{pizza,burger,fries,drink,dessert}.glb`. If a file is present
+it's **lazy-loaded only when that category is first opened**, auto-centred and
+scale-normalised. If absent, a hand-built procedural hero of the same shape is
+used. See `public/assets/3d/README.md`.
+
+---
+
+## Performance & resilience
+
+- 3D bundle is a lazy `dynamic(ssr:false)` import — initial paint is the menu.
+- One GLB loads at a time, on demand; procedural heroes are geometry-only.
+- Device tiers (`high / medium / low`) scale DPR (down to 0.75), post-processing,
+  DOF, shadow maps and transition duration. Low tier drops the post stack.
+- `prefers-reduced-motion` → a short, respectful portal flash instead.
+- **No WebGL** → `FallbackTransition.tsx`: the same timeline drives a CSS 3D
+  transform on a generated art panel. Menu stays fully usable.
+- **WebGL context lost / model parse error** → `SceneErrorBoundary` degrades to
+  procedural or to the menu; never a blank screen.
+- No external network dependencies at runtime (fonts via `next/font`, env map
+  baked locally, imagery generated as inline SVG).
+
+---
+
+## Verification status
+
+- ✅ `next build` — TypeScript, compile and static generation all pass.
+- ✅ SSR render of every UI component — no errors/warnings in the dev log.
+- ✅ Transition controller simulated headlessly: emergence arc peaks at
+  `z ≈ 3.1` (past the glass), portal cycles 0→1→0, menu swaps exactly once,
+  timeline completes and hides the hero; a mid-flight category re-tap continues
+  from the current position (no snap back) and settles cleanly.
+- ⚠️ Live WebGL rendering, the visual quality of the illusion, gyroscope
+  parallax and touch interaction need a real browser/device — the automated
+  Chrome bridge was unavailable in this environment. Open `npm run dev` on a
+  phone (or Chrome device-toolbar) to review.
+
+---
+
+## Optional AR
+
+`ARButton` renders only where `navigator.xr` reports `immersive-ar` support
+(Android Chrome). It starts a native WebXR hit-test session and places the hero
+on a detected surface. iOS Safari (no WebXR) simply hides the button.
