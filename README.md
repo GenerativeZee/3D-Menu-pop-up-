@@ -108,8 +108,21 @@ used. See `public/assets/3d/README.md`.
 
 ---
 
-## Optional AR
+## Optional AR — "View on my table"
 
-`ARButton` renders only where `navigator.xr` reports `immersive-ar` support
-(Android Chrome). It starts a native WebXR hit-test session and places the hero
-on a detected surface. iOS Safari (no WebXR) simply hides the button.
+`components/ui/ARButton.tsx` + `lib/ar.ts`. Feature-detected, two paths, and
+nothing loads until the button is tapped:
+
+- **WebXR** (Android Chrome / any `immersive-ar` UA): starts a live hit-test
+  session — reticle on detected surfaces, tap to place, tap again to move, a
+  grow-in on placement, a `ShadowMaterial` contact shadow so the dish looks
+  grounded, and **real-world light estimation** (`light-estimation` feature)
+  that drives the key light's colour, direction and intensity when the device
+  offers it. In-session DOM overlay with status text + a Close button. Uses the
+  category GLB when present, the shared procedural mesh otherwise.
+- **iOS Quick Look**: rendered as a native `<a rel="ar">` link to
+  `/assets/3d/<shape>.usdz` — shown only when that file exists.
+- **Neither**: the button doesn't render.
+
+The AR dish geometry comes from the same `lib/foodMesh.ts` builder as the
+in-app hero, so they always match.

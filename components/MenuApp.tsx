@@ -70,7 +70,6 @@ export function MenuApp() {
         {restaurant.legal}
       </p>
 
-      <div id="ar-overlay" />
       <EntryVeil />
     </main>
   );

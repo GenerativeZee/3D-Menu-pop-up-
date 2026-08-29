@@ -21,6 +21,20 @@ dessert.glb
 - **Materials:** standard PBR (metallic-roughness). They are lit by the app's
   studio rig + a locally-baked environment map.
 
+## iOS AR (optional)
+
+For the "View on my table" button to work on **iPhone / iPad** (which have no
+WebXR), also drop USDZ versions next to the GLBs, named by shape:
+
+```
+pizza.usdz   burger.usdz   fries.usdz   drink.usdz   dessert.usdz
+```
+
+When a `<shape>.usdz` exists, iOS Safari shows the button as a native AR Quick
+Look link. Android/WebXR devices ignore these and use the GLB in a live
+hit-test session. Convert GLB→USDZ with Apple's `usdzconvert`, Reality Composer,
+or `npx @google/model-viewer`'s tooling.
+
 ## How the swap works
 
 `config/categories.ts` sets `model: "/assets/3d/<name>.glb"` per category.
