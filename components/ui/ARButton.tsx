@@ -17,8 +17,9 @@ import {
 
 const STATUS_COPY: Record<ARStatus, string> = {
   starting: "Starting camera…",
-  scanning: "Point at your table, then tap to place",
-  placed: "Tap the floor to move it",
+  scanning: "Move your phone slowly across the table",
+  ready: "Tap anywhere to place it",
+  placed: "Tap the floor again to move it",
   unsupported: "AR isn’t available on this device",
   insecure: "AR needs a secure page — open the https:// link",
   error: "Couldn’t start AR",

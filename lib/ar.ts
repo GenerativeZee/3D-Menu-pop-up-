@@ -68,6 +68,7 @@ export async function usdzExists(url: string): Promise<boolean> {
 export type ARStatus =
   | "starting"
   | "scanning"
+  | "ready"
   | "placed"
   | "unsupported"
   | "insecure"
@@ -172,7 +173,6 @@ export async function launchWebXR(opts: WebXRLaunchOptions): Promise<ARHandle> {
       opacity: 0.95,
     }),
   );
-  reticle.matrixAutoUpdate = false;
   reticle.visible = false;
   scene.add(reticle);
 
@@ -252,20 +252,31 @@ export async function launchWebXR(opts: WebXRLaunchOptions): Promise<ARHandle> {
     lightProbe = null;
   }
 
+  // scratch objects reused each frame
+  const hitMatrix = new THREE.Matrix4();
+  const tmpPos = new THREE.Vector3();
+  const tmpQuat = new THREE.Quaternion();
+  const tmpScale = new THREE.Vector3();
+  let surfaceFound = false;
+  let lastStatus: ARStatus = "starting";
+  const emit = (s: ARStatus) => {
+    if (s === lastStatus) return;
+    lastStatus = s;
+    onStatus?.(s);
+  };
+
   let placedAt = 0;
   const placeAtReticle = () => {
     if (!reticle.visible) return;
     placed.visible = true;
-    placed.position.setFromMatrixPosition(reticle.matrix);
-    const q = new THREE.Quaternion();
-    reticle.matrix.decompose(new THREE.Vector3(), q, new THREE.Vector3());
-    placed.quaternion.copy(q);
+    hitMatrix.decompose(placed.position, placed.quaternion, tmpScale);
+    dishHolder.scale.setScalar(0.001);
     placedAt = performance.now();
-    onStatus?.("placed");
+    emit("placed");
   };
   session.addEventListener("select", placeAtReticle);
 
-  onStatus?.("scanning");
+  emit("scanning");
 
   const easeOutBack = (x: number) => {
     const c1 = 1.70158;
@@ -277,14 +288,18 @@ export async function launchWebXR(opts: WebXRLaunchOptions): Promise<ARHandle> {
     if (!frame) return;
 
     const results = frame.getHitTestResults(hitTestSource);
-    if (results.length) {
-      const pose = results[0].getPose(localSpace);
-      if (pose) {
-        reticle.visible = !placed.visible || performance.now() - placedAt > 400;
-        reticle.matrix.fromArray(pose.transform.matrix);
-      }
+    const pose = results.length ? results[0].getPose(localSpace) : null;
+    if (pose) {
+      surfaceFound = true;
+      hitMatrix.fromArray(pose.transform.matrix);
+      hitMatrix.decompose(tmpPos, tmpQuat, tmpScale);
+      reticle.position.copy(tmpPos);
+      reticle.quaternion.copy(tmpQuat);
+      reticle.visible = !placed.visible;
+      if (!placed.visible) emit("ready");
     } else {
       reticle.visible = false;
+      if (!placed.visible && surfaceFound) emit("scanning");
     }
 
     if (lightProbe) {
